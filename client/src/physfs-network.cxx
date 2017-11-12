@@ -1,15 +1,30 @@
 #include "physfs-network.h"
+#include <cstring>
 
 #define BAIL(e, r) do { if (e) PHYSFS_setErrorCode(e); return r; } while (0)
+#define BAIL_IF(c, e, r) do { if (c) { if (e) PHYSFS_setErrorCode(e); return r; } } while (0)
 
 namespace {
+	const int open_archive_integrity = 137641469136;
+
+	struct OpenArchiveParameters {
+		int integrity;
+		const char* filename;
+		int port;
+	};
+
 	void *Network_openArchive(PHYSFS_Io *io, const char *name, int forWriting, int *claimed) {
+		BAIL_IF(forWriting, PHYSFS_ERR_READ_ONLY, nullptr);
+        if (std::strcmp(name, ".physfs-network") == 0) {
+            *claimed = 1;
+        } else {
+            BAIL(PHYSFS_ERR_INVALID_ARGUMENT, nullptr);
+        }
 
-		if (forWriting) {
-			BAIL(PHYSFS_ERR_READ_ONLY, nullptr);
-		}
+        OpenArchiveParameters* parameters = (OpenArchiveParameters*) io->opaque;
+        BAIL_IF(parameters->integrity != open_archive_integrity, PHYSFS_ERR_INVALID_ARGUMENT, nullptr);
 
-		return nullptr;
+		BAIL(PHYSFS_ERR_UNSUPPORTED, nullptr);
 	}
 
 	PHYSFS_EnumerateCallbackResult Network_dirTreeEnumerate(void *opaque,
@@ -46,13 +61,33 @@ namespace {
 	void Network_closeArchive(void *opaque) {
 		// TODO: clear the received io
 	}
+
+
+	int dummy_seek(struct PHYSFS_Io *io, PHYSFS_uint64 offset) {
+		return 1;
+	}
 }
 
+extern "C" int PHYSFSNetwork_mount(const char *hostname, int port, const char *mountPoint, int appendToPath) {
+	OpenArchiveParameters opaque = {
+		open_archive_integrity,
+		hostname,
+		port
+	};
+	struct PHYSFS_Io io = {
+		0,
+		&opaque,
+		nullptr, // read
+		nullptr, // write
+		dummy_seek,
+	};
+	return PHYSFS_mountIo(&io, ".physfs-network", mountPoint, appendToPath);
+}
 
 extern "C" const PHYSFS_Archiver PHYSFS_Archiver_Network = {
 	0,
 	{
-		nullptr,
+		"physfs-network",
 		"Read from a TCP socket",
 		"Henrique Gemignani",
 		"https://github.com/henriquegemignani/physfs-network",
