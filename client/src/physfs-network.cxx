@@ -6,6 +6,7 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 #endif
+#include "asio.hpp"
 #include <cstdio>
 
 #define BAIL(e, r) do { if (e) PHYSFS_setErrorCode(e); return r; } while (0)
@@ -13,6 +14,7 @@
 
 namespace {
 	const int open_archive_integrity = 137641469136;
+    std::exception last_exception;
 
 	struct OpenArchiveParameters {
 		int integrity;
@@ -31,27 +33,19 @@ namespace {
         OpenArchiveParameters* parameters = (OpenArchiveParameters*) io->opaque;
         BAIL_IF(parameters->integrity != open_archive_integrity, PHYSFS_ERR_INVALID_ARGUMENT, nullptr);
 
-        struct addrinfo hints;
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_protocol = IPPROTO_TCP;
+        try {
+            asio::io_service io_service;
 
-        struct addrinfo *result;
-        auto iResult = getaddrinfo(parameters->hostname, parameters->port, &hints, &result);
-        if (iResult != 0) {
-            std::printf("FAILURE! %s\n", gai_strerror(iResult));
+            asio::ip::tcp::socket s(io_service);
+            asio::ip::tcp::resolver resolver(io_service);
+            asio::connect(s, resolver.resolve({ parameters->hostname, parameters->port }));
+
+            s.close();
+        
+        } catch (std::exception& e) {
+            last_exception = e;
+            BAIL(PHYSFS_ERR_NOT_A_FILE, nullptr);
         }
-        BAIL_IF(iResult != 0, PHYSFS_ERR_NOT_A_FILE, nullptr);
-        // TODO freeaddrinfo(result)
-
-        // Create a SOCKET for connecting to server
-        auto connected_socket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-        BAIL_IF(connected_socket == INVALID_SOCKET, PHYSFS_ERR_NOT_A_FILE, nullptr);
-        // TODO freeaddrinfo(result)
-
-        iResult = shutdown(connected_socket, SD_SEND);
-        BAIL_IF(iResult == SOCKET_ERROR, PHYSFS_ERR_NOT_A_FILE, nullptr);
 
 		BAIL(PHYSFS_ERR_UNSUPPORTED, nullptr);
 	}

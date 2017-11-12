@@ -19,7 +19,10 @@ message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: physfs")
 message(STATUS "-----------------------------------------------------")
 add_subdirectory("libs/physfs-3.0.1" ${CMAKE_BINARY_DIR}/physfs)
-set(MEGA_PHYSFS physfs-static)
+
+add_library(asio INTERFACE)
+target_include_directories(asio INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/libs/asio-1.10.8/include)
+target_compile_definitions(asio INTERFACE "-DASIO_STANDALONE")
 
 add_subdirectory("client")
 add_subdirectory("test")
