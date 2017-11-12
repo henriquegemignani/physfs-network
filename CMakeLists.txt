@@ -18,7 +18,7 @@ endif()
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: physfs")
 message(STATUS "-----------------------------------------------------")
-add_subdirectory("libs/physfs-${MEGA_PHYSFS_VER}" ${CMAKE_BINARY_DIR}/physfs)
+add_subdirectory("libs/physfs-3.0.1" ${CMAKE_BINARY_DIR}/physfs)
 set(MEGA_PHYSFS physfs-static)
 
 add_subdirectory("client")
