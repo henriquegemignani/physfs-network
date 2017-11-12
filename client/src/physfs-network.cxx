@@ -1,6 +1,13 @@
 #include "physfs-network.h"
 #include <cstring>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
+#endif
+#include <cstdio>
+
 #define BAIL(e, r) do { if (e) PHYSFS_setErrorCode(e); return r; } while (0)
 #define BAIL_IF(c, e, r) do { if (c) { if (e) PHYSFS_setErrorCode(e); return r; } } while (0)
 
@@ -9,8 +16,8 @@ namespace {
 
 	struct OpenArchiveParameters {
 		int integrity;
-		const char* filename;
-		int port;
+		const char* hostname;
+        const char* port;
 	};
 
 	void *Network_openArchive(PHYSFS_Io *io, const char *name, int forWriting, int *claimed) {
@@ -23,6 +30,28 @@ namespace {
 
         OpenArchiveParameters* parameters = (OpenArchiveParameters*) io->opaque;
         BAIL_IF(parameters->integrity != open_archive_integrity, PHYSFS_ERR_INVALID_ARGUMENT, nullptr);
+
+        struct addrinfo hints;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+
+        struct addrinfo *result;
+        auto iResult = getaddrinfo(parameters->hostname, parameters->port, &hints, &result);
+        if (iResult != 0) {
+            std::printf("FAILURE! %s\n", gai_strerror(iResult));
+        }
+        BAIL_IF(iResult != 0, PHYSFS_ERR_NOT_A_FILE, nullptr);
+        // TODO freeaddrinfo(result)
+
+        // Create a SOCKET for connecting to server
+        auto connected_socket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+        BAIL_IF(connected_socket == INVALID_SOCKET, PHYSFS_ERR_NOT_A_FILE, nullptr);
+        // TODO freeaddrinfo(result)
+
+        iResult = shutdown(connected_socket, SD_SEND);
+        BAIL_IF(iResult == SOCKET_ERROR, PHYSFS_ERR_NOT_A_FILE, nullptr);
 
 		BAIL(PHYSFS_ERR_UNSUPPORTED, nullptr);
 	}
@@ -68,7 +97,7 @@ namespace {
 	}
 }
 
-extern "C" int PHYSFSNetwork_mount(const char *hostname, int port, const char *mountPoint, int appendToPath) {
+extern "C" int PHYSFSNetwork_mount(const char *hostname, const char* port, const char *mountPoint, int appendToPath) {
 	OpenArchiveParameters opaque = {
 		open_archive_integrity,
 		hostname,
